@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>收入问卷与津贴评估</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#F59E0B',
+                        neutral: '#64748B',
+                        light: '#F1F5F9',
+                        dark: '#1E293B'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .question-card {
+                @apply bg-white rounded-xl shadow-lg p-6 transition-all duration-300 transform hover:shadow-xl;
+            }
+            .option-btn {
+                @apply w-full text-left p-4 mb-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50;
+            }
+            .btn-primary {
+                @apply bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-all duration-200 transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-primary/50;
+            }
+            .btn-secondary {
+                @apply bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition-all duration-200 transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-gray-300;
+            }
+            .progress-bar {
+                @apply h-2 bg-gray-200 rounded-full overflow-hidden;
+            }
+            .progress-value {
+                @apply h-full bg-primary rounded-full transition-all duration-500 ease-out;
+            }
+            .back-btn {
+                @apply absolute top-4 right-4 text-neutral hover:text-primary transition-colors duration-200 text-lg;
+            }
+            .back-home {
+                @apply fixed top-6 right-6 text-dark/60 hover:text-dark transition-colors duration-200 z-40 font-medium;
+            }
+            .clear-stats {
+                @apply absolute top-6 left-6 text-secondary hover:text-secondary/80 transition-colors duration-200 cursor-pointer z-40 text-2xl;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-light to-gray-200 min-h-screen font-sans text-dark relative">
+    <!-- 返回首页按钮 -->
+    <div id="back-home-btn" class="back-home">
+        <i class="fa fa-home mr-1"></i>返回首页
+    </div>
+
+    <!-- 页面容器 -->
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- 头部 -->
+        <header class="text-center mb-8">
+            <h1 class="text-[clamp(1.8rem,5vw,2.8rem)] font-bold text-dark mb-2">收入与津贴评估问卷</h1>
+            <p class="text-neutral text-lg">请根据您的实际情况完成以下问题，我们将为您评估适用的津贴方案</p>
+        </header>
+
+        <!-- 进度指示器 -->
+        <div class="mb-8">
+            <div class="flex justify-between text-sm text-neutral mb-2">
+                <span>开始</span>
+                <span>进行中</span>
+                <span>完成</span>
+            </div>
+            <div class="progress-bar">
+                <div id="progress" class="progress-value w-0"></div>
+            </div>
+        </div>
+
+        <!-- 问卷容器 -->
+        <div id="survey-container" class="mb-12 relative">
+            <!-- 问题将通过JS动态插入 -->
+        </div>
+
+        <!-- 结果页面 (默认隐藏) -->
+        <div id="result-page" class="hidden question-card text-center">
+            <h2 class="text-2xl font-bold mb-4">您的评估结果</h2>
+            <div id="result-content" class="text-xl mb-6 py-4 border-y border-gray-100"></div>
+            <button id="restart-btn" class="btn-primary">
+                <i class="fa fa-refresh mr-2"></i>重新测试
+            </button>
+        </div>
+
+        <!-- 管理员统计页面 (默认隐藏) -->
+        <div id="admin-page" class="hidden question-card relative">
+            <!-- 清除统计数据按钮 -->
+            <div id="clear-stats-btn" class="clear-stats">
+                <i class="fa fa-trash"></i>
+            </div>
+            
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">津贴结果统计</h2>
+                <button id="close-admin" class="text-neutral hover:text-dark">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="h-64 mb-6">
+                <canvas id="results-chart"></canvas>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600">津贴类型</th>
+                            <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600">数量</th>
+                            <th class="py-3 px-4 text-left text-sm font-semibold text-gray-600">百分比</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stats-table-body">
+                        <!-- 统计数据将通过JS动态插入 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 密码输入框 (默认隐藏) -->
+        <div id="password-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-xl p-6 max-w-md w-full">
+                <h3 id="password-modal-title" class="text-xl font-bold mb-4">管理员访问</h3>
+                <p id="password-modal-desc" class="text-neutral mb-4">请输入密码查看统计数据</p>
+                <input type="password" id="admin-password" class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="输入密码">
+                <div class="flex justify-end">
+                    <button id="cancel-password" class="btn-secondary mr-2">取消</button>
+                    <button id="submit-password" class="btn-primary">确认</button>
+                </div>
+                <p id="password-error" class="text-red-500 text-sm mt-2 hidden">密码错误，请重试</p>
+            </div>
+        </div>
+
+        <!-- 管理员按钮 -->
+        <button id="admin-btn" class="fixed bottom-6 right-6 bg-accent text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition-all duration-300 hover:scale-110 z-40">
+            <i class="fa fa-bar-chart"></i>
+        </button>
+    </div>
+
+    <script>
+        // 问卷数据存储
+        const surveyData = {
+            currentQuestionId: null, // 当前问题ID
+            answers: {},
+            results: [], // 存储所有用户的结果，用于统计
+            questionOrder: [] // 记录用户已访问的问题ID顺序
+        };
+
+        // 从本地存储加载结果
+        function loadResults() {
+            const savedResults = localStorage.getItem('surveyResults');
+            if (savedResults) {
+                surveyData.results = JSON.parse(savedResults);
+            }
+        }
+
+        // 保存结果到本地存储
+        function saveResults() {
+            localStorage.setItem('surveyResults', JSON.stringify(surveyData.results));
+        }
+
+        // 定义所有问题
+        const allQuestions = {
+            income: {
+                id: 'income',
+                text: '请选择您的年收入',
+                type: 'radio',
+                options: [
+                    { value: 'below10', text: '10万以下' },
+                    { value: '10to50', text: '10万到50万' },
+                    { value: '50to100', text: '50万到100万' },
+                    { value: 'above100', text: '100万以上' }
+                ],
+                nextQuestion: function(answer) {
+                    // 根据收入选择下一个问题
+                    const questionGroups = {
+                        below10: 'identity_below10',
+                        '10to50': 'identity_10to50',
+                        '50to100': 'identity_50to100',
+                        above100: 'identity_above100'
+                    };
+                    return questionGroups[answer] || null;
+                }
+            },
+            
+            // 10万以下收入组问题
+            identity_below10: {
+                id: 'identity_below10',
+                text: '请选择身份',
+                type: 'radio',
+                options: [
+                    { value: 'hk', text: '香港永居' },
+                    { value: 'mainland', text: '内地人才' }
+                ],
+                nextQuestion: function() {
+                    return 'attendance_below10';
+                }
+            },
+            attendance_below10: {
+                id: 'attendance_below10',
+                text: '您可否出勤',
+                type: 'radio',
+                options: [
+                    { value: 'yes', text: '可以出勤 (每周两次详情参照条款)' },
+                    { value: 'no', text: '不能出勤 (每周两次详情参照条款)' }
+                ],
+                nextQuestion: function() {
+                    return 'education_below10';
+                }
+            },
+            education_below10: {
+                id: 'education_below10',
+                text: '您的学历是什么',
+                type: 'radio',
+                options: [
+                    { value: 'basic', text: '持证基本学历' },
+                    { value: 'bachelor', text: '本科学历' },
+                    { value: 'postgraduate', text: '研究生及以上学历' }
+                ],
+                nextQuestion: function() {
+                    // 最后一个问题，返回null表示完成
+                    return null;
+                }
+            },
+            
+            // 10万到50万收入组问题
+            identity_10to50: {
+                id: 'identity_10to50',
+                text: '请选择您的身份',
+                type: 'radio',
+                options: [
+                    { value: 'hk', text: '香港永居' },
+                    { value: 'mainland', text: '内地人才' }
+                ],
+                nextQuestion: function() {
+                    return 'industry_10to50';
+                }
+            },
+            industry_10to50: {
+                id: 'industry_10to50',
+                text: '请选择您的行业',
+                type: 'radio',
+                options: [
+                    { value: 'bank', text: '银行及相关销售行业（至少2年）' },
+                    { value: 'insurance_high', text: '保险销售（至少2年）（年收入大于25万）' },
+                    { value: 'insurance_low', text: '保险销售（年收入小于25万）' },
+                    { value: 'other', text: '其他行业（abc都不符合）' }
+                ],
+                nextQuestion: function() {
+                    return 'attendance_10to50';
+                }
+            },
+            attendance_10to50: {
+                id: 'attendance_10to50',
+                text: '您可否出勤',
+                type: 'radio',
+                options: [
+                    { value: 'yes', text: '可以出勤 (每周两次详情参照条款)' },
+                    { value: 'no', text: '不能出勤 (每周两次详情参照条款)' }
+                ],
+                nextQuestion: function() {
+                    return null;
+                }
+            },
+            
+            // 50万到100万收入组问题
+            identity_50to100: {
+                id: 'identity_50to100',
+                text: '请选择您的身份',
+                type: 'radio',
+                options: [
+                    { value: 'hk', text: '香港永居' },
+                    { value: 'mainland', text: '内地人才' }
+                ],
+                nextQuestion: function() {
+                    return 'attendance_50to100';
+                }
+            },
+            attendance_50to100: {
+                id: 'attendance_50to100',
+                text: '您可否出勤',
+                type: 'radio',
+                options: [
+                    { value: 'yes', text: '可以出勤 (每周两次详情参照条款)' },
+                    { value: 'no', text: '不能出勤 (每周两次详情参照条款)' }
+                ],
+                nextQuestion: function() {
+                    return 'industry_50to100';
+                }
+            },
+            industry_50to100: {
+                id: 'industry_50to100',
+                text: '请选择您的行业',
+                type: 'radio',
+                options: [
+                    { value: 'bank', text: '银行及相关行业从业至少2年' },
+                    { value: 'insurance', text: '保险销售从业至少2年' },
+                    { value: 'other', text: '其他行业' }
+                ],
+                nextQuestion: function() {
+                    return null;
+                }
+            },
+            
+            // 100万以上收入组问题
+            identity_above100: {
+                id: 'identity_above100',
+                text: '请选择您的身份',
+                type: 'radio',
+                options: [
+                    { value: 'mainland', text: '内地人才' },
+                    { value: 'hk', text: '香港永居' }
+                ],
+                nextQuestion: function() {
+                    return 'attendance_above100';
+                }
+            },
+            attendance_above100: {
+                id: 'attendance_above100',
+                text: '您可否出勤',
+                type: 'radio',
+                options: [
+                    { value: 'yes', text: '可以出勤 (每周两次详情参照条款)' },
+                    { value: 'no', text: '不能出勤 (每周两次详情参照条款)' }
+                ],
+                nextQuestion: function() {
+                    return 'industry_above100';
+                }
+            },
+            industry_above100: {
+                id: 'industry_above100',
+                text: '请选择您的行业',
+                type: 'radio',
+                options: [
+                    { value: 'insurance', text: '保险销售行业，至少从业2年' },
+                    { value: 'bank', text: '其他银行及相关行业，至少从业2年' },
+                    { value: 'other', text: '其他行业' }
+                ],
+                nextQuestion: function() {
+                    return null;
+                }
+            }
+        };
+
+        // DOM元素
+        const surveyContainer = document.getElementById('survey-container');
+        const resultPage = document.getElementById('result-page');
+        const resultContent = document.getElementById('result-content');
+        const restartBtn = document.getElementById('restart-btn');
+        const progressBar = document.getElementById('progress');
+        const adminBtn = document.getElementById('admin-btn');
+        const passwordModal = document.getElementById('password-modal');
+        const adminPassword = document.getElementById('admin-password');
+        const submitPassword = document.getElementById('submit-password');
+        const cancelPassword = document.getElementById('cancel-password');
+        const passwordError = document.getElementById('password-error');
+        const adminPage = document.getElementById('admin-page');
+        const closeAdmin = document.getElementById('close-admin');
+        const statsTableBody = document.getElementById('stats-table-body');
+        const backHomeBtn = document.getElementById('back-home-btn');
+        const clearStatsBtn = document.getElementById('clear-stats-btn');
+
+        // 初始化问卷
+        function initSurvey() {
+            loadResults();
+            surveyData.answers = {};
+            surveyData.questionOrder = [];
+            // 从收入问题开始
+            showQuestion('income');
+            updateProgress();
+        }
+
+        // 显示指定问题
+        function showQuestion(questionId) {
+            const question = allQuestions[questionId];
+            if (!question) return;
+            
+            // 更新当前问题ID
+            surveyData.currentQuestionId = questionId;
+            
+            // 如果是新问题，添加到问题顺序中；如果是返回的问题，不重复添加
+            if (!surveyData.questionOrder.includes(questionId)) {
+                surveyData.questionOrder.push(questionId);
+            }
+            
+            // 清空容器
+            surveyContainer.innerHTML = '';
+            
+            // 创建问题卡片容器
+            const questionCard = document.createElement('div');
+            questionCard.className = 'question-card relative';
+            
+            // 添加返回上一题按钮（如果不是第一题）
+            const currentIndex = surveyData.questionOrder.indexOf(questionId);
+            if (currentIndex > 0) {
+                const backButton = document.createElement('button');
+                backButton.className = 'back-btn';
+                backButton.innerHTML = '<i class="fa fa-arrow-left mr-1"></i>上一题';
+                backButton.addEventListener('click', goToPreviousQuestion);
+                questionCard.appendChild(backButton);
+            }
+            
+            // 问题标题
+            const questionTitle = document.createElement('h2');
+            questionTitle.className = 'text-2xl font-bold mb-6';
+            questionTitle.textContent = question.text;
+            questionCard.appendChild(questionTitle);
+            
+            // 选项容器
+            const optionsContainer = document.createElement('div');
+            optionsContainer.className = 'space-y-2';
+            
+            // 特殊处理：内地人才的学历选项只有两个
+            let optionsToRender = question.options;
+            if (questionId === 'education_below10') {
+                // 获取身份答案（从相应的身份问题中）
+                const identityAnswer = surveyData.answers['identity_below10'];
+                if (identityAnswer === 'mainland') {
+                    optionsToRender = question.options.filter(option => 
+                        option.value !== 'basic'
+                    );
+                }
+            }
+            
+            // 渲染选项，确保之前选择的答案被选中
+            optionsToRender.forEach(option => {
+                const optionBtn = document.createElement('div');
+                optionBtn.className = 'option-btn';
+                optionBtn.innerHTML = `
+                    <label class="flex items-center cursor-pointer">
+                        <input type="${question.type}" name="${questionId}" value="${option.value}" class="mr-3 h-5 w-5 text-primary focus:ring-primary" ${surveyData.answers[questionId] === option.value ? 'checked' : ''}>
+                        <span>${option.text}</span>
+                    </label>
+                `;
+                optionsContainer.appendChild(optionBtn);
+            });
+            
+            questionCard.appendChild(optionsContainer);
+            
+            // 下一步按钮容器
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'mt-8 flex justify-end';
+            
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'btn-primary';
+            nextBtn.innerHTML = '<i class="fa fa-arrow-right mr-2"></i>下一步';
+            nextBtn.addEventListener('click', handleNext);
+            
+            buttonContainer.appendChild(nextBtn);
+            questionCard.appendChild(buttonContainer);
+            
+            surveyContainer.appendChild(questionCard);
+        }
+
+        // 前往上一题
+        function goToPreviousQuestion() {
+            const currentIndex = surveyData.questionOrder.indexOf(surveyData.currentQuestionId);
+            if (currentIndex > 0) {
+                const previousQuestionId = surveyData.questionOrder[currentIndex - 1];
+                showQuestion(previousQuestionId);
+                updateProgress();
+            }
+        }
+
+        // 处理下一步
+        function handleNext() {
+            const question = allQuestions[surveyData.currentQuestionId];
+            const selectedOption = document.querySelector(`input[name="${surveyData.currentQuestionId}"]:checked`);
+            
+            if (!selectedOption) {
+                // 显示错误提示
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'text-red-500 text-sm mt-2';
+                errorMsg.textContent = '请选择一个选项';
+                document.querySelector('.option-btn').parentNode.parentNode.appendChild(errorMsg);
+                
+                // 3秒后移除错误提示
+                setTimeout(() => {
+                    errorMsg.remove();
+                }, 3000);
+                return;
+            }
+            
+            // 保存当前答案
+            surveyData.answers[surveyData.currentQuestionId] = selectedOption.value;
+            
+            // 获取下一个问题ID
+            const nextQuestionId = question.nextQuestion(selectedOption.value);
+            
+            if (nextQuestionId) {
+                // 有下一个问题，显示它
+                showQuestion(nextQuestionId);
+                updateProgress();
+            } else {
+                // 没有下一个问题了，显示结果
+                showResult();
+            }
+        }
+
+        // 显示结果
+        function showResult() {
+            // 提取关键答案（简化答案键名，便于结果判断）
+            const answers = {
+                income: surveyData.answers.income,
+                identity: surveyData.answers.identity_below10 || 
+                          surveyData.answers.identity_10to50 || 
+                          surveyData.answers.identity_50to100 || 
+                          surveyData.answers.identity_above100,
+                attendance: surveyData.answers.attendance_below10 || 
+                           surveyData.answers.attendance_10to50 || 
+                           surveyData.answers.attendance_50to100 || 
+                           surveyData.answers.attendance_above100,
+                education: surveyData.answers.education_below10,
+                industry: surveyData.answers.industry_10to50 || 
+                          surveyData.answers.industry_50to100 || 
+                          surveyData.answers.industry_above100
+            };
+            
+            let resultText = '';
+            
+            // 根据不同条件计算结果
+            if (answers.income === 'below10') {
+                if (answers.identity === 'hk') {
+                    if (answers.attendance === 'yes') {
+                        if (answers.education === 'basic') {
+                            resultText = '您符合 <strong>A类基础津贴</strong> 条件，每月可领取3000元。';
+                        } else if (answers.education === 'bachelor') {
+                            resultText = '您符合 <strong>A类进阶津贴</strong> 条件，每月可领取5000元。';
+                        } else {
+                            resultText = '您符合 <strong>A类高级津贴</strong> 条件，每月可领取8000元。';
+                        }
+                    } else {
+                        resultText = '您不符合A类津贴领取条件（需满足出勤要求）。';
+                    }
+                } else {
+                    if (answers.attendance === 'yes') {
+                        if (answers.education === 'bachelor') {
+                            resultText = '您符合 <strong>B类进阶津贴</strong> 条件，每月可领取4000元。';
+                        } else {
+                            resultText = '您符合 <strong>B类高级津贴</strong> 条件，每月可领取7000元。';
+                        }
+                    } else {
+                        resultText = '您不符合B类津贴领取条件（需满足出勤要求）。';
+                    }
+                }
+            } 
+            // 第二套问卷 (10万到50万)
+            else if (answers.income === '10to50') {
+                if (answers.identity === 'hk') {
+                    if (answers.industry === 'bank' && answers.attendance === 'yes') {
+                        resultText = '您符合 <strong>C类银行津贴</strong> 条件，每月可领取6000元。';
+                    } else if (answers.industry === 'insurance_high' && answers.attendance === 'yes') {
+                        resultText = '您符合 <strong>C类高级保险津贴</strong> 条件，每月可领取7000元。';
+                    } else {
+                        resultText = '您不符合C类津贴领取条件。';
+                    }
+                } else {
+                    if (answers.industry === 'other' && answers.attendance === 'yes') {
+                        resultText = '您符合 <strong>D类特殊人才津贴</strong> 条件，每月可领取5500元。';
+                    } else {
+                        resultText = '您不符合D类津贴领取条件。';
+                    }
+                }
+            }
+            // 第三套问卷 (50万到100万)
+            else if (answers.income === '50to100') {
+                if (answers.identity === 'hk' && answers.attendance === 'yes') {
+                    resultText = '您符合 <strong>E类香港精英津贴</strong> 条件，每月可领取9000元。';
+                } else if (answers.identity === 'mainland' && answers.industry === 'other' && answers.attendance === 'yes') {
+                    resultText = '您符合 <strong>F类内地专才津贴</strong> 条件，每月可领取8500元。';
+                } else {
+                    resultText = '您不符合E类或F类津贴领取条件。';
+                }
+            }
+            // 第四套问卷 (100万以上)
+            else if (answers.income === 'above100') {
+                if (answers.attendance === 'yes') {
+                    resultText = '您符合 <strong>G类高端人才津贴</strong> 条件，每月可领取12000元。';
+                } else {
+                    resultText = '您不符合G类津贴领取条件（需满足出勤要求）。';
+                }
+            }
+            
+            // 保存结果到统计数据
+            const resultType = resultText.match(/<strong>(.*?)<\/strong>/)[1];
+            surveyData.results.push({
+                type: resultType,
+                date: new Date().toISOString(),
+                answers: { ...answers }
+            });
+            saveResults();
+            
+            // 显示结果
+            resultContent.innerHTML = resultText;
+            surveyContainer.classList.add('hidden');
+            resultPage.classList.remove('hidden');
+        }
+
+        // 更新进度条
+        function updateProgress() {
+            // 计算当前组的总问题数
+            let totalQuestions = 0;
+            const income = surveyData.answers.income;
+            
+            if (!income) {
+                totalQuestions = 1; // 只有收入问题
+            } else {
+                // 根据收入组确定总问题数
+                const questionCounts = {
+                    below10: 4,
+                    '10to50': 4,
+                    '50to100': 4,
+                    above100: 4
+                };
+                totalQuestions = questionCounts[income] || 1;
+            }
+            
+            // 当前已完成的问题数
+            const completedQuestions = surveyData.questionOrder.length;
+            
+            // 计算进度
+            const progress = (completedQuestions / totalQuestions) * 100;
+            progressBar.style.width = `${progress}%`;
+        }
+
+        // 显示统计数据
+        function showStatistics() {
+            // 计算各类结果的数量
+            const resultCounts = {};
+            surveyData.results.forEach(result => {
+                if (resultCounts[result.type]) {
+                    resultCounts[result.type]++;
+                } else {
+                    resultCounts[result.type] = 1;
+                }
+            });
+            
+            const total = surveyData.results.length;
+            statsTableBody.innerHTML = '';
+            
+            // 更新表格
+            Object.keys(resultCounts).forEach(type => {
+                const row = document.createElement('tr');
+                const percentage = total > 0 ? ((resultCounts[type] / total) * 100).toFixed(1) : 0;
+                
+                row.innerHTML = `
+                    <td class="py-3 px-4 border-b border-gray-100">${type}</td>
+                    <td class="py-3 px-4 border-b border-gray-100">${resultCounts[type]}</td>
+                    <td class="py-3 px-4 border-b border-gray-100">${percentage}%</td>
+                `;
+                
+                statsTableBody.appendChild(row);
+            });
+            
+            // 如果没有数据
+            if (total === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="3" class="py-4 px-4 text-center text-neutral">暂无统计数据</td>
+                `;
+                statsTableBody.appendChild(row);
+            }
+            
+            // 更新图表
+            updateChart(resultCounts, total);
+            
+            // 显示统计页面
+            surveyContainer.classList.add('hidden');
+            resultPage.classList.add('hidden');
+            adminPage.classList.remove('hidden');
+        }
+
+        // 更新图表
+        function updateChart(resultCounts, total) {
+            const ctx = document.getElementById('results-chart').getContext('2d');
+            
+            // 销毁现有图表（如果存在）
+            if (window.resultChart) {
+                window.resultChart.destroy();
+            }
+            
+            // 创建新图表
+            window.resultChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(resultCounts),
+                    datasets: [{
+                        data: Object.values(resultCounts),
+                        backgroundColor: [
+                            '#3B82F6', '#10B981', '#F59E0B', '#EF4444', 
+                            '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        },
+                        title: {
+                            display: true,
+                            text: `总评估次数: ${total}`
+                        }
+                    }
+                }
+            });
+        }
+
+        // 清除统计数据
+        function clearStatistics() {
+            if (confirm('确定要清除所有统计数据吗？此操作不可恢复。')) {
+                surveyData.results = [];
+                saveResults();
+                showStatistics();
+            }
+        }
+
+        // 事件监听
+        restartBtn.addEventListener('click', () => {
+            // 重新测试：完全重置，回到第一个问题
+            resultPage.classList.add('hidden');
+            adminPage.classList.add('hidden');
+            surveyContainer.classList.remove('hidden');
+            initSurvey();
+        });
+
+        // 管理员按钮点击事件
+        adminBtn.addEventListener('click', () => {
+            passwordModal.classList.remove('hidden');
+            adminPassword.value = '';
+            passwordError.classList.add('hidden');
+        });
+
+        // 提交密码
+        submitPassword.addEventListener('click', () => {
+            if (adminPassword.value === '0724') { // 密码验证
+                passwordModal.classList.add('hidden');
+                showStatistics();
+            } else {
+                passwordError.classList.remove('hidden');
+            }
+        });
+
+        // 取消密码输入
+        cancelPassword.addEventListener('click', () => {
+            passwordModal.classList.add('hidden');
+            passwordError.classList.add('hidden');
+        });
+
+        // 关闭管理员页面
+        closeAdmin.addEventListener('click', () => {
+            adminPage.classList.add('hidden');
+            if (surveyData.questionOrder.length > 0) {
+                // 显示当前问题
+                showQuestion(surveyData.currentQuestionId);
+                surveyContainer.classList.remove('hidden');
+            } else {
+                // 初始化问卷
+                initSurvey();
+            }
+        });
+
+        // 清除统计数据
+        clearStatsBtn.addEventListener('click', clearStatistics);
+
+        // 返回首页按钮
+        backHomeBtn.addEventListener('click', () => {
+            if (confirm('确定要返回首页吗？当前进度将丢失。')) {
+                adminPage.classList.add('hidden');
+                resultPage.classList.add('hidden');
+                initSurvey();
+            }
+        });
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', initSurvey);
+    </script>
+</body>
+</html>
+    
